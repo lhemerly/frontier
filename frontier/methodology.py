@@ -128,9 +128,19 @@ def derive_assurance_state(
     criteria = {c.id: c for c in state.brief.criteria}
     for key, (name, _) in CRITERIA.items():
         result, finding = validations.get(key), findings.get(key)
+        referenced_ids = finding.evidence_ids if finding is not None else []
+        if finding is not None and finding.evidence_paths:
+            by_path = {item.source_path: item.id for item in state.evidence}
+            if any(path not in by_path for path in finding.evidence_paths):
+                continue
+            path_ids = [by_path[path] for path in finding.evidence_paths]
+            if referenced_ids and referenced_ids != path_ids:
+                continue
+            referenced_ids = path_ids
         if (
             result is None
             or finding is None
+            or referenced_ids != result.evidence_ids
             or result.validator != name
             or result.kind != "deterministic"
             or result.claim != finding.claim

@@ -144,6 +144,13 @@ def test_duplicate_finding_criterion_cannot_close(case, conflicting):
     assert report["evidence_chain"] == {}
 
 
+def test_finding_evidence_mutation_cannot_close_with_stale_validation(case):
+    _, state, _ = case
+    state.steps[0].report.findings[0].evidence_ids.append("e-not-in-state")
+    report = assessment_result(state)
+    assert report["stage"] != "closed"
+
+
 @pytest.mark.parametrize("collection", ["findings", "validations", "both"])
 @pytest.mark.parametrize("mutation", ["extra", "missing"])
 def test_closing_synthesis_requires_exact_criterion_sets(case, collection, mutation):
