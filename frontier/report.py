@@ -1,51 +1,42 @@
-"""Machine-readable assessment summaries derived from the research ledger."""
-
-from typing import Any
+"""Serialize the methodology's current assessment; never aggregate loose verdicts."""
 
 from agent.research.models import ResearchState
 
+from .manifest import manifest_from_state
+from .methodology import AssessmentStage, derive_assurance_state
 
-def assessment_result(state: ResearchState, assessment_id: str, target: str) -> dict[str, Any]:
-    """Build an honest JSON-ready result; candidate readiness is not certification."""
-    latest = state.latest_validations()
-    finding = latest.get("vulnerability_reproduced")
-    remediation = latest.get("remediation_revalidated")
-    regression = latest.get("regression_tests_pass")
-    all_supported = all(
-        result is not None and result.status == "supported"
-        for result in (finding, remediation, regression)
-    )
-    result = "verified_remediated" if all_supported else (
-        "inconclusive" if state.status in ("failed", "blocked") else state.status
-    )
+
+def assessment_result(state: ResearchState) -> dict:
+    manifest = manifest_from_state(state)
+    assurance, chain = derive_assurance_state(state, manifest)
+    baseline = chain.get("baseline")
     return {
-        "assessment": assessment_id,
-        "target": target,
-        "prohibited_states": [],
-        "finding": _validation(finding),
-        "remediation": _validation(remediation),
-        "revalidation": {
-            "security_test": _status(remediation),
-            "regression_tests": _status(regression),
-            "original_path_reproduced": (
-                False if remediation is not None and remediation.status == "supported" else None
-            ),
+        "assessment": manifest.assessment_id,
+        "research_run": state.run_id,
+        "target": manifest.target,
+        "scope": list(manifest.scope),
+        "prohibited_states": list(manifest.prohibited_states),
+        "brief_hash": manifest.brief_hash,
+        "finding_id": baseline.observation.finding_id if baseline else None,
+        "stage": assurance.stage.value,
+        "history": [stage.value for stage in assurance.history],
+        "result": (
+            "declared_remediated"
+            if assurance.stage == AssessmentStage.CLOSED
+            else assurance.stage.value
+        ),
+        "evidence_chain": {
+            phase: {
+                "evidence_id": record.evidence.id,
+                "sha256": record.evidence.sha256,
+                **record.observation.model_dump(),
+            }
+            for phase, record in chain.items()
         },
-        "result": result,
         "research_status": state.status,
+        "verification": "declared_artifacts",
         "limitations": [
-            "Frontier validators check captured artifact contents. They do not independently establish "
-            "that the recorded command ran or that the evidence is untampered before capture."
+            "Content hashes link captured declarations. They do not establish that commands "
+            "ran, that revisions were measured correctly, or that execution was attested."
         ],
     }
-
-
-def _validation(value: Any) -> dict[str, Any]:
-    if value is None:
-        return {"status": "not_tested", "evidence": []}
-    return {"status": value.status, "claim": value.claim, "evidence": value.evidence_ids,
-            "validator": value.validator, "reason": value.reason}
-
-
-def _status(value: Any) -> str:
-    return "not_tested" if value is None else value.status
