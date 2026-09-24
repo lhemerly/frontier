@@ -117,16 +117,30 @@ def derive_assurance_state(
     findings = {f.criterion_id: f for f in step.report.findings}
     validations = {v.criterion_id: v for v in step.validations}
     evidence = {e.id: e for e in state.evidence}
-    if len(evidence) != len(state.evidence) or len(validations) != len(step.validations):
+    if (
+        len(evidence) != len(state.evidence)
+        or len(findings) != len(step.report.findings)
+        or len(validations) != len(step.validations)
+    ):
         return assurance, {}
     checked = {}
     adapters = frontier_validators(manifest)
     criteria = {c.id: c for c in state.brief.criteria}
     for key, (name, _) in CRITERIA.items():
         result, finding = validations.get(key), findings.get(key)
+        referenced_ids = finding.evidence_ids if finding is not None else []
+        if finding is not None and finding.evidence_paths:
+            by_path = {item.source_path: item.id for item in state.evidence}
+            if any(path not in by_path for path in finding.evidence_paths):
+                continue
+            path_ids = [by_path[path] for path in finding.evidence_paths]
+            if referenced_ids and referenced_ids != path_ids:
+                continue
+            referenced_ids = path_ids
         if (
             result is None
             or finding is None
+            or referenced_ids != result.evidence_ids
             or result.validator != name
             or result.kind != "deterministic"
             or result.claim != finding.claim
@@ -175,6 +189,7 @@ def derive_assurance_state(
         assurance.close(original_path_absent=True, regression_tests_passed=False)
     elif (
         state.status == "candidate_ready"
+        and set(findings) == set(validations) == set(CRITERIA)
         and step.report.answer
         and state.answer == step.report.answer
     ):

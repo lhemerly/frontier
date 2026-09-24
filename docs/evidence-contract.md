@@ -43,6 +43,15 @@ Submit baseline evidence for `vulnerability_reproduced`, baseline + post-patch
 for `remediation_revalidated`, and all three for `regression_tests_pass`. Include
 all three findings in the final StepReport, referencing the captured snapshots.
 Each phase must be unambiguous. Later steps may reuse captured evidence IDs.
+Duplicate finding or validation criterion IDs are rejected. Closure requires
+exactly the three criteria above in both the findings and validation results;
+partial steps may still record progress.
+
+Evidence referenced by a finding is an assertion set, not a search space. Every
+referenced JSON artifact must be valid for that assertion. Validators parse all
+supplied JSON artifacts: a malformed record, another assessment's record, or an
+invalid snapshot hash makes the validation inconclusive even when valid evidence
+is also supplied. Select only the evidence IDs needed for the assertion.
 
 The final `answer` is a JSON-encoded object with `assessment_id`, `finding_id`,
 `reproduction_id`, `patch_id` and `workspace_revision`. Those values must match the
