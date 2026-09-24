@@ -1,93 +1,87 @@
-"""Deterministic checks over captured, immutable mcts-agent evidence snapshots."""
+"""Validate one declared chain without running tools or repository code."""
 
 import json
-from typing import Any
 
 from agent.research.models import Criterion, Evidence, Finding, ValidationResult
 
+from .evidence import baseline_for, chain_for, records, unique_object
+from .manifest import AssessmentManifest
+
+CRITERIA = {
+    "vulnerability_reproduced": ("frontier_reproduction", "baseline"),
+    "remediation_revalidated": ("frontier_remediation", "post_patch"),
+    "regression_tests_pass": ("frontier_regression", "regression"),
+}
+
 
 class ArtifactValidator:
-    """Validate the declared JSON evidence contract; never execute repository code."""
-
     kind = "deterministic"
 
-    def __init__(self, name: str, expected_phase: str, expected_outcome: str,
-                 expected_exit_code: int):
-        self.name = name
-        self.expected_phase = expected_phase
-        self.expected_outcome = expected_outcome
-        self.expected_exit_code = expected_exit_code
+    def __init__(self, manifest: AssessmentManifest, criterion_id: str):
+        self.manifest = manifest
+        self.criterion_id = criterion_id
+        self.name, self.phase = CRITERIA[criterion_id]
 
     def validate(
-        self, criterion: Criterion, finding: Finding, evidence: list[Evidence], *, answer: str | None = None
+        self,
+        criterion: Criterion,
+        finding: Finding,
+        evidence: list[Evidence],
+        *,
+        answer: str | None = None,
     ) -> ValidationResult:
-        del answer
-        matching = [item for item in evidence if item.source_path.endswith(".json")]
-        parsed: list[tuple[Evidence, dict[str, Any]]] = []
-        for item in matching:
-            try:
-                value = json.loads(item.text)
-            except (json.JSONDecodeError, TypeError):
-                continue
-            if isinstance(value, dict):
-                parsed.append((item, value))
-
-        candidates = [(item, obj) for item, obj in parsed if
-                    obj.get("schema_version") == 1
-                    and obj.get("phase") == self.expected_phase
-                    and obj.get("outcome") == self.expected_outcome
-                    and isinstance(obj.get("command"), str) and obj["command"].strip()
-                    and type(obj.get("exit_code")) is int
-                    and obj["exit_code"] == self.expected_exit_code]
-        if self.expected_phase in ("baseline", "post_patch"):
-            candidates = [(item, obj) for item, obj in candidates
-                          if isinstance(obj.get("reproduction_id"), str)
-                          and obj["reproduction_id"].strip()]
-        accepted = candidates
-        if self.expected_phase == "post_patch":
-            baselines = [obj for _, obj in parsed if obj.get("schema_version") == 1
-                         and isinstance(obj.get("reproduction_id"), str)
-                         and obj["reproduction_id"].strip()
-                         and isinstance(obj.get("command"), str) and obj["command"].strip()
-                         and obj.get("phase") == "baseline"
-                         and obj.get("outcome") == "reproduced"
-                         and type(obj.get("exit_code")) is int and obj["exit_code"] == 1]
-            accepted = [(item, obj) for item, obj in candidates if any(
-                obj.get("reproduction_id") == baseline.get("reproduction_id")
-                and obj.get("command") == baseline.get("command")
-                for baseline in baselines
-            )]
-        status = "supported" if accepted else "inconclusive"
-        reason = (
-            f"Captured JSON records satisfy the {self.expected_phase!r}/{self.expected_outcome!r} "
-            "artifact contract and command/exit-code rules. The post-patch record is tied to a baseline "
-            "by reproduction_id and identical command. This checks recorded artifact contents, not the "
-            "truth or provenance of the executed command."
-            if accepted else
-            f"No captured JSON evidence satisfies the required {self.expected_phase!r}/"
-            f"{self.expected_outcome!r} artifact contract and command/exit-code rules."
-        )
+        status, ids = "inconclusive", []
+        try:
+            if criterion.id != self.criterion_id or finding.criterion_id != criterion.id:
+                raise ValueError("Criterion does not match the installed adapter")
+            items = records(evidence, self.manifest.assessment_id, self.manifest.prohibited_states)
+            candidates = [r for r in items if r.observation.phase == self.phase]
+            if len(candidates) != 1:
+                raise ValueError("Supply exactly one observation for this phase")
+            selected = candidates[0]
+            obj = selected.observation
+            chain = [selected]
+            if self.phase == "post_patch":
+                chain = [baseline_for(selected, items), selected]
+            elif self.phase == "regression":
+                chain = list(chain_for(selected, items))
+            expected = {
+                "baseline": {("reproduced", 1): "supported", ("not_reproduced", 0): "contradicted"},
+                "post_patch": {
+                    ("not_reproduced", 0): "supported",
+                    ("reproduced", 1): "contradicted",
+                },
+                "regression": {("passed", 0): "supported", ("failed", 1): "contradicted"},
+            }
+            verdict = expected[self.phase].get((obj.outcome, obj.exit_code))
+            if verdict is None:
+                raise ValueError(
+                    "Outcome and exit code disagree with the pytest_assertion protocol"
+                )
+            if answer is not None:
+                summary = json.loads(answer, object_pairs_hook=unique_object)
+                keys = ("assessment_id", "finding_id", "reproduction_id")
+                if self.phase != "baseline":
+                    keys += ("patch_id", "workspace_revision")
+                if not isinstance(summary, dict) or any(
+                    summary.get(k) != getattr(obj, k) for k in keys
+                ):
+                    raise ValueError("Candidate answer describes a different evidence chain")
+            status = verdict
+            ids = [r.evidence.id for r in chain]
+            reason = "Consistent declared artifact chain under pytest_assertion; execution is not attested"
+        except (ValueError, TypeError) as exc:
+            reason = str(exc)
         return ValidationResult(
             criterion_id=criterion.id,
             claim=finding.claim,
             status=status,
             validator=self.name,
             kind=self.kind,
-            evidence_ids=[item.id for item, _ in accepted],
+            evidence_ids=ids,
             reason=reason,
         )
 
 
-def frontier_validators() -> dict[str, ArtifactValidator]:
-    """Return validator adapters referenced by :func:`assessment_brief`."""
-    return {
-        "frontier_reproduction": ArtifactValidator(
-            "frontier_reproduction", "baseline", "reproduced", expected_exit_code=1
-        ),
-        "frontier_remediation": ArtifactValidator(
-            "frontier_remediation", "post_patch", "not_reproduced", expected_exit_code=0
-        ),
-        "frontier_regression": ArtifactValidator(
-            "frontier_regression", "regression", "passed", expected_exit_code=0
-        ),
-    }
+def frontier_validators(manifest: AssessmentManifest) -> dict[str, ArtifactValidator]:
+    return {name: ArtifactValidator(manifest, key) for key, (name, _) in CRITERIA.items()}
