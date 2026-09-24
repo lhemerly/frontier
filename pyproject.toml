@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "frontier-assurance"
+version = "0.1.0"
+description = "Repository security assurance built on mcts-agent research mode"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcts-agent @ git+https://github.com/lhemerly/mcts-agent.git@2fa3c2ec7255b3799fcf19fa801c84bcdea96451",
+]
+
+[project.scripts]
+frontier-assess = "frontier.cli:app"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+include = ["frontier*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

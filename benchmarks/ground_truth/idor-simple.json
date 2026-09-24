@@ -1,0 +1,7 @@
+{
+  "vulnerability": "insecure direct object reference",
+  "cwe": "CWE-639",
+  "location": "app/document_store.py:get_document",
+  "prohibited_state": "ordinary user reads another user's private document",
+  "reproduction": "test_other_user_cannot_read_document fails before patch and passes after patch"
+}

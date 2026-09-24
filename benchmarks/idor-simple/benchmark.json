@@ -1,0 +1,7 @@
+{
+  "id": "idor-simple",
+  "language": "python",
+  "runtime_dependencies": [],
+  "test_command": "PYTHONPATH=. python -m pytest -q tests",
+  "ground_truth_file": "../ground_truth/idor-simple.json"
+}
