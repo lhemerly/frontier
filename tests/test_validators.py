@@ -30,18 +30,29 @@ def test_valid_chain_retains_all_links(case):
 )
 def test_regression_rejects_mixed_or_malformed_chain(case, field, value):
     manifest, state, chain = case
+    from pathlib import Path
+
     obj = json.loads(chain[2].text)
     obj[field] = value
-    changed = [*chain[:2], evidence(obj)]
+    changed = [
+        *chain[:2],
+        evidence(obj, Path(manifest.target) / ".mcts-research" / "test-run"),
+    ]
     step = make_step(manifest, state.brief, changed)
     assert step.validations[2].status == "inconclusive"
 
 
 def test_post_patch_rejects_changed_reproduction_command(case):
     manifest, state, chain = case
+    from pathlib import Path
+
     obj = json.loads(chain[1].text)
     obj["command"] = "pytest another-test.py"
-    changed = [chain[0], evidence(obj), chain[2]]
+    changed = [
+        chain[0],
+        evidence(obj, Path(manifest.target) / ".mcts-research" / "test-run"),
+        chain[2],
+    ]
     assert make_step(manifest, state.brief, changed).validations[1].status == "inconclusive"
 
 

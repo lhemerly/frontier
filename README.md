@@ -40,8 +40,11 @@ These consistency checks do not protect against an attacker rewriting every
 local control file; trusted execution/storage provenance is future upstream work.
 
 The run directory contains `assessment.json`, the research checkpoint and
-captured evidence. Missing or failed evidence remains explicit; budget exhaustion
-is not a conclusion that the target is secure.
+captured evidence. Report generation reopens and verifies every referenced
+mcts-agent snapshot against its cached text and SHA-256 before deriving
+assurance. A snapshot changed after the runner returns cannot retain support.
+Missing or failed evidence remains explicit; budget exhaustion is not a
+conclusion that the target is secure.
 
 ## Evidence and closure
 

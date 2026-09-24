@@ -2,6 +2,12 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+
+from agent.research.models import ResearchState
+
+from .evidence import Record, records
+from .manifest import AssessmentManifest
 
 
 class AssessmentStage(str, Enum):
@@ -78,13 +84,16 @@ class AssuranceState:
         self.history.append(self.stage)
 
 
-def derive_assurance_state(state, manifest):
+def derive_assurance_state(
+    state: ResearchState, manifest: AssessmentManifest
+) -> tuple[AssuranceState, dict[str, Record]]:
     """Replay only the current step's checked chain through the methodology.
 
     Earlier validations cannot certify a later synthesis. Rechecking snapshots
     makes standalone report generation obey the same contract as the runner.
     """
-    from .evidence import records
+    from agent.research.storage import verify_evidence
+
     from .validators import CRITERIA, frontier_validators
 
     assurance = AssuranceState(
@@ -96,6 +105,14 @@ def derive_assurance_state(state, manifest):
     assurance.history = [AssessmentStage.DISCOVER, AssessmentStage.INCONCLUSIVE]
     step = state.steps[-1]
     if not step.execution_success or state.mock or state.status in ("failed", "blocked"):
+        return assurance, {}
+    if not state.run_directory:
+        return assurance, {}
+    run_dir = Path(state.run_directory).resolve()
+    try:
+        for item in state.evidence:
+            verify_evidence(item, run_dir)
+    except (OSError, ValueError):
         return assurance, {}
     findings = {f.criterion_id: f for f in step.report.findings}
     validations = {v.criterion_id: v for v in step.validations}

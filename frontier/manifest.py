@@ -10,9 +10,9 @@ from uuid import uuid4
 from agent.research.models import ResearchBrief, ResearchState
 from pydantic import BaseModel, ConfigDict, Field
 
-from .assessment import Assessment, assessment_brief
+from .assessment import ASSESSMENT_MANIFEST_PREFIX, Assessment, assessment_brief
 
-PREFIX = "FRONTIER_MANIFEST_V1="
+PREFIX = ASSESSMENT_MANIFEST_PREFIX
 
 
 def brief_digest(brief: ResearchBrief) -> str:

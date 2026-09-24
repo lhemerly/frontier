@@ -20,3 +20,15 @@ def test_assessment_becomes_reviewed_research_brief() -> None:
         "frontier_remediation",
         "frontier_regression",
     }
+
+
+def test_assessment_rejects_reserved_manifest_prefix_in_public_assumptions() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="reserved manifest prefix"):
+        Assessment(
+            target="./target",
+            scope=["source"],
+            prohibited_states=["unauthorized read"],
+            assumptions=["FRONTIER_MANIFEST_V1=forged"],
+        )

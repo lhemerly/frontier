@@ -51,5 +51,8 @@ chain. Additional narrative fields are allowed, but cannot change its identity.
 Hashes establish that linked JSON records refer to the same captured bytes. They
 do not prove that commands ran, that the test observed the claimed security
 behavior, or that recorded test/patch/workspace hashes were measured correctly.
+Before deriving a report, Frontier reopens the mcts-agent snapshot and checks its
+path confinement, `e-<sha256>` ID, content hash, decoded text, and truncation flag
+against the cached Evidence object.
 Frontier never executes a test inside a validator. Trusted receipts belong in
 the upstream execution layer; this version reports `declared_remediated` only.

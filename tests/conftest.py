@@ -1,5 +1,6 @@
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 from agent.research.models import Evidence, Finding, ResearchState, ResearchStep, StepReport
@@ -9,13 +10,17 @@ from frontier.manifest import prepare_assessment
 from frontier.validators import CRITERIA, frontier_validators
 
 
-def evidence(obj):
+def evidence(obj, snapshot_root):
     text = json.dumps(obj, sort_keys=True)
     digest = hashlib.sha256(text.encode()).hexdigest()
+    snapshot = f"evidence/{digest}.txt"
+    snapshot_file = Path(snapshot_root) / snapshot
+    snapshot_file.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_file.write_text(text, encoding="utf-8")
     return Evidence(
-        id=digest,
+        id=f"e-{digest}",
         source_path=f"evidence/{obj['phase']}-{digest}.json",
-        snapshot_path=f"evidence/{digest}.txt",
+        snapshot_path=snapshot,
         sha256=digest,
         text=text,
     )
@@ -29,6 +34,7 @@ def make_chain(
     revision="after-1",
     regression_outcome="passed",
 ):
+    snapshot_root = Path(manifest.target) / ".mcts-research" / "test-run"
     common = dict(
         schema_version=2,
         assessment_id=manifest.assessment_id,
@@ -46,7 +52,8 @@ def make_chain(
             exit_code=1,
             outcome="reproduced",
             workspace_revision="before",
-        )
+        ),
+        snapshot_root,
     )
     links = dict(baseline_sha256=baseline.sha256, baseline_revision="before", patch_id=patch)
     post = evidence(
@@ -58,7 +65,8 @@ def make_chain(
             exit_code=0,
             outcome="not_reproduced",
             workspace_revision=revision,
-        )
+        ),
+        snapshot_root,
     )
     regression = evidence(
         dict(
@@ -70,7 +78,8 @@ def make_chain(
             outcome=regression_outcome,
             workspace_revision=revision,
             post_patch_sha256=post.sha256,
-        )
+        ),
+        snapshot_root,
     )
     return [baseline, post, regression]
 
@@ -124,6 +133,7 @@ def case(tmp_path):
         query="security assessment",
         workspace=str(tmp_path),
         brief=brief,
+        run_directory=str(Path(tmp_path) / ".mcts-research" / "test-run"),
         evidence=chain,
         steps=[step],
         status="candidate_ready",

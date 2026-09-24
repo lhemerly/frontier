@@ -7,6 +7,8 @@ from agent.research.models import Criterion, ResearchBrief
 
 from .evidence import Observation
 
+ASSESSMENT_MANIFEST_PREFIX = "FRONTIER_MANIFEST_V1="
+
 
 @dataclass(frozen=True)
 class Assessment:
@@ -24,6 +26,11 @@ class Assessment:
             raise ValueError("scope must contain nonblank entries")
         if not self.prohibited_states or any(not item.strip() for item in self.prohibited_states):
             raise ValueError("at least one prohibited state is required")
+        if any(
+            not isinstance(item, str) or item.startswith(ASSESSMENT_MANIFEST_PREFIX)
+            for item in self.assumptions
+        ):
+            raise ValueError("assumptions cannot use Frontier's reserved manifest prefix")
 
 
 def assessment_brief(assessment: Assessment) -> ResearchBrief:

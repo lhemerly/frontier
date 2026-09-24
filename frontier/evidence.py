@@ -60,7 +60,8 @@ def records(evidence: list[Evidence], assessment_id: str, prohibited_states: tup
         if item.id in seen:
             raise ValueError("Duplicate evidence ID")
         seen.add(item.id)
-        if item.truncated or hashlib.sha256(item.text.encode()).hexdigest() != item.sha256:
+        digest = hashlib.sha256(item.text.encode()).hexdigest()
+        if item.truncated or digest != item.sha256 or item.id != f"e-{digest}":
             raise ValueError("Evidence is truncated or its content hash differs")
         if not item.source_path.endswith(".json"):
             continue

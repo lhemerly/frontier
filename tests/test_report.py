@@ -83,23 +83,25 @@ def test_same_step_mixed_patch_support_does_not_close(case):
 
 def test_same_final_answer_cannot_hide_different_baseline_snapshot(case):
     import json
+    from pathlib import Path
 
     from conftest import evidence
 
     manifest, state, chain = case
     b = json.loads(chain[0].text)
     b["workspace_revision"] = "another-baseline-revision"
-    baseline = evidence(b)
+    snapshot_root = Path(manifest.target) / ".mcts-research" / "test-run"
+    baseline = evidence(b, snapshot_root)
     p = json.loads(chain[1].text)
     p.update(baseline_sha256=baseline.sha256, baseline_revision=b["workspace_revision"])
-    post = evidence(p)
+    post = evidence(p, snapshot_root)
     r = json.loads(chain[2].text)
     r.update(
         baseline_sha256=baseline.sha256,
         baseline_revision=b["workspace_revision"],
         post_patch_sha256=post.sha256,
     )
-    other = [baseline, post, evidence(r)]
+    other = [baseline, post, evidence(r, snapshot_root)]
     step = make_step(manifest, state.brief, other)
     # Every adapter supports its supplied evidence and the final answer is identical.
     assert step.report.answer == state.answer
@@ -109,6 +111,17 @@ def test_same_final_answer_cannot_hide_different_baseline_snapshot(case):
     state.steps = [step]
     state.evidence = [*chain, *other]
     assert assessment_result(state)["stage"] != "closed"
+
+
+def test_snapshot_mutated_after_runner_returns_cannot_support_closure(case):
+    from pathlib import Path
+
+    _, state, chain = case
+    snapshot = Path(state.run_directory) / chain[0].snapshot_path
+    snapshot.write_text("changed after capture", encoding="utf-8")
+    report = assessment_result(state)
+    assert report["stage"] == "inconclusive"
+    assert report["evidence_chain"] == {}
 
 
 def test_missing_snapshot_cannot_be_replaced_by_stored_supported_verdict(case):
