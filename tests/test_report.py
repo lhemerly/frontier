@@ -128,3 +128,33 @@ def test_missing_snapshot_cannot_be_replaced_by_stored_supported_verdict(case):
     _, state, _ = case
     state.evidence = state.evidence[:1]
     assert assessment_result(state)["stage"] != "closed"
+
+
+@pytest.mark.parametrize("conflicting", [False, True])
+def test_duplicate_finding_criterion_cannot_close(case, conflicting):
+    _, state, _ = case
+    findings = state.steps[0].report.findings
+    duplicate = findings[0].model_copy(deep=True)
+    if conflicting:
+        duplicate.claim = "Conflicting claim hidden by dictionary overwrite"
+    # Mutate after model construction: the valid original remains last.
+    findings.insert(0, duplicate)
+    report = assessment_result(state)
+    assert report["stage"] == "inconclusive"
+    assert report["evidence_chain"] == {}
+
+
+@pytest.mark.parametrize("collection", ["findings", "validations", "both"])
+@pytest.mark.parametrize("mutation", ["extra", "missing"])
+def test_closing_synthesis_requires_exact_criterion_sets(case, collection, mutation):
+    _, state, _ = case
+    step = state.steps[0]
+    collections = {"findings": step.report.findings, "validations": step.validations}
+    for name, items in collections.items():
+        if collection not in (name, "both"):
+            continue
+        if mutation == "missing":
+            items.pop()
+        else:
+            items.append(items[0].model_copy(update={"criterion_id": "unexpected_criterion"}))
+    assert assessment_result(state)["stage"] != "closed"

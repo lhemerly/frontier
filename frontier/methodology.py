@@ -117,7 +117,11 @@ def derive_assurance_state(
     findings = {f.criterion_id: f for f in step.report.findings}
     validations = {v.criterion_id: v for v in step.validations}
     evidence = {e.id: e for e in state.evidence}
-    if len(evidence) != len(state.evidence) or len(validations) != len(step.validations):
+    if (
+        len(evidence) != len(state.evidence)
+        or len(findings) != len(step.report.findings)
+        or len(validations) != len(step.validations)
+    ):
         return assurance, {}
     checked = {}
     adapters = frontier_validators(manifest)
@@ -175,6 +179,7 @@ def derive_assurance_state(
         assurance.close(original_path_absent=True, regression_tests_passed=False)
     elif (
         state.status == "candidate_ready"
+        and set(findings) == set(validations) == set(CRITERIA)
         and step.report.answer
         and state.answer == step.report.answer
     ):
