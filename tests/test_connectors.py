@@ -55,7 +55,9 @@ def test_opencode_missing_executable_is_reported(tmp_path):
 
 
 def test_connector_registration_uses_mcts_extension_point():
-    factory = lambda config: OpenCodeExecutorProvider(config.executor_model)
+    def factory(config: AgentConfig) -> OpenCodeExecutorProvider:
+        return OpenCodeExecutorProvider(config.executor_model)
+
     with patch("frontier.connectors.register_harness") as register:
         register_connector("example", factory)
     register.assert_called_once_with("example", executor_factory=factory)
