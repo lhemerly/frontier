@@ -6,9 +6,9 @@ from pathlib import Path
 
 import typer
 from agent.config import load_config
+from agent.providers import available_harnesses
 from agent.research.models import ResearchState
 from agent.research.runner import run_research
-from agent.providers import available_harnesses
 
 from .assessment import Assessment
 from .manifest import AssessmentManifest, manifest_from_state, prepare_assessment
