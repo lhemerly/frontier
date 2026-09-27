@@ -31,8 +31,10 @@ frontier-assess ./target --connector opencode --model provider/model
 
 The connector invokes OpenCode's non-interactive `opencode run` command in the
 target workspace. If `--model` is omitted, OpenCode uses its configured default.
-Other connectors can be added as Frontier packages that implement
-`BaseExecutorProvider` and register through `frontier.connectors.register_connector`.
+The CLI discovers any registered mcts-agent executor. To add another connector,
+implement `BaseExecutorProvider`, expose a registration function in the
+`mcts_agent.harnesses` Python entry point group, and register it through
+`frontier.connectors.register_connector`.
 
 No live providers are used in normal CI.
 
