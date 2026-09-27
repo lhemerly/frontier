@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import subprocess
 import textwrap
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from agent.config import AgentConfig
 from agent.providers import BaseExecutorProvider, register_harness
-
 
 ConnectorFactory = Callable[[AgentConfig], BaseExecutorProvider]
 
