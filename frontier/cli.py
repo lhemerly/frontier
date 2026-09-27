@@ -8,6 +8,7 @@ import typer
 from agent.config import load_config
 from agent.research.models import ResearchState
 from agent.research.runner import run_research
+from agent.providers import available_harnesses
 
 from .assessment import Assessment
 from .manifest import AssessmentManifest, manifest_from_state, prepare_assessment
@@ -15,7 +16,6 @@ from .report import assessment_result
 from .validators import frontier_validators
 
 app = typer.Typer(help="Run a Frontier repository security assurance assessment.")
-SUPPORTED_CONNECTORS = {"codex", "opencode"}
 
 
 def manifest_path(manifest: AssessmentManifest) -> Path:
@@ -54,10 +54,11 @@ def run_assessment(
         if target is None or not target.is_dir():
             raise ValueError("A new assessment requires an existing target directory")
         selected_connector = (connector or "codex").strip().lower()
-        if selected_connector not in SUPPORTED_CONNECTORS:
+        connectors = available_harnesses()
+        if selected_connector not in connectors:
             raise ValueError(
-                f"Unknown connector '{selected_connector}'. Choose one of: "
-                f"{', '.join(sorted(SUPPORTED_CONNECTORS))}"
+                f"Unknown connector '{selected_connector}'. Available connectors: "
+                f"{', '.join(connectors)}"
             )
         assessment = Assessment(
             str(target.resolve()),
@@ -104,7 +105,7 @@ def assess(
     scope: list[str] | None = typer.Option(None),
     prohibited_state: list[str] | None = typer.Option(None),
     connector: str | None = typer.Option(
-        None, help="Executor connector for new assessments: codex (default) or opencode."
+        None, help="Executor connector for new assessments; defaults to codex."
     ),
     model: str | None = typer.Option(
         None, help="Optional model override in the connector's native format."
