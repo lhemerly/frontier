@@ -6,6 +6,7 @@ from pathlib import Path
 
 import typer
 from agent.config import load_config
+from agent.providers import available_harnesses
 from agent.research.models import ResearchState
 from agent.research.runner import run_research
 
@@ -34,12 +35,16 @@ def run_assessment(
     scope: list[str] | None = None,
     prohibited_states: list[str] | None = None,
     max_steps: int = 12,
+    connector: str | None = None,
+    model: str | None = None,
 ):
     if resume is not None:
         if target is not None or scope is not None or prohibited_states is not None:
             raise ValueError(
                 "Resume uses saved metadata; omit target, --scope and --prohibited-state"
             )
+        if connector is not None or model is not None:
+            raise ValueError("Resume uses the saved connector and model; omit --connector and --model")
         checkpoint = resume / "checkpoint.json" if resume.is_dir() else resume
         before = ResearchState.model_validate_json(checkpoint.read_text())
         manifest = manifest_from_state(before)
@@ -48,6 +53,13 @@ def run_assessment(
     else:
         if target is None or not target.is_dir():
             raise ValueError("A new assessment requires an existing target directory")
+        selected_connector = (connector or "codex").strip().lower()
+        connectors = available_harnesses()
+        if selected_connector not in connectors:
+            raise ValueError(
+                f"Unknown connector '{selected_connector}'. Available connectors: "
+                f"{', '.join(connectors)}"
+            )
         assessment = Assessment(
             str(target.resolve()),
             scope if scope is not None else ["application source", "local test environment"],
@@ -60,12 +72,15 @@ def run_assessment(
         path.parent.mkdir(parents=True, exist_ok=False)
         with path.open("x", encoding="utf-8") as stream:
             stream.write(manifest.model_dump_json(indent=2))
+        config = replace(load_config(), executor_provider=selected_connector)
+        if model is not None:
+            config = replace(config, executor_model=model)
         kwargs = {
             "query": "Determine whether defined prohibited states are reachable within scope. "
             "Reproduce a verified path, remediate it, and re-evaluate it. Report uncertainty "
             "when evidence is absent; do not invent a vulnerability to satisfy criteria.",
             "workspace": manifest.target,
-            "config": replace(load_config(), executor_provider="codex"),
+            "config": config,
             "brief": brief,
         }
     state, run_dir = run_research(
@@ -89,6 +104,12 @@ def assess(
     resume: Path | None = typer.Option(None, exists=True),
     scope: list[str] | None = typer.Option(None),
     prohibited_state: list[str] | None = typer.Option(None),
+    connector: str | None = typer.Option(
+        None, help="Executor connector for new assessments; defaults to codex."
+    ),
+    model: str | None = typer.Option(
+        None, help="Optional model override in the connector's native format."
+    ),
 ) -> None:
     """Run with TARGET, or resume using --resume CHECKPOINT without new metadata."""
     try:
@@ -98,6 +119,8 @@ def assess(
             scope=scope,
             prohibited_states=prohibited_state,
             max_steps=max_steps,
+            connector=connector,
+            model=model,
         )
     except (ValueError, OSError) as exc:
         raise typer.BadParameter(str(exc)) from exc

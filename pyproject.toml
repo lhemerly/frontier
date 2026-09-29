@@ -15,6 +15,9 @@ dependencies = [
 [project.scripts]
 frontier-assess = "frontier.cli:app"
 
+[project.entry-points."mcts_agent.harnesses"]
+frontier_connectors = "frontier.connectors:register"
+
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.5"]
 

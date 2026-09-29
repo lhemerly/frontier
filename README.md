@@ -2,9 +2,9 @@
 
 Frontier supplies repository AppSec assessment semantics to
 [`mcts-agent`](https://github.com/lhemerly/mcts-agent). It imports the pinned
-upstream package: MCTS owns research and checkpoints; Codex owns execution,
-tools and changes. Frontier supplies the reviewed brief, assessment manifest,
-validation adapters, lifecycle derivation and JSON report.
+upstream package: MCTS owns research and checkpoints; a selectable execution
+connector owns tool use and changes. Frontier supplies the reviewed brief,
+assessment manifest, validation adapters, lifecycle derivation and JSON report.
 
 This is an assurance prototype. It validates **declared artifacts**, not trusted
 execution receipts. A coherent completed chain is labeled `declared_remediated`,
@@ -21,8 +21,22 @@ frontier-assess ./target --prohibited-state 'ordinary user reads another user re
 ```
 
 Configure the planner and System One providers using `mcts-agent` configuration.
-Install and authenticate Codex separately. New Frontier assessments explicitly
-select Codex as the executor. No live providers are used in normal CI.
+Install and authenticate Codex or OpenCode separately. New assessments use
+Codex by default; select the OpenCode connector with:
+
+```bash
+frontier-assess ./target --connector opencode
+frontier-assess ./target --connector opencode --model provider/model
+```
+
+The connector invokes OpenCode's non-interactive `opencode run` command in the
+target workspace. If `--model` is omitted, OpenCode uses its configured default.
+The CLI discovers any registered mcts-agent executor. To add another connector,
+implement `BaseExecutorProvider`, expose a registration function in the
+`mcts_agent.harnesses` Python entry point group, and register it through
+`frontier.connectors.register_connector`.
+
+No live providers are used in normal CI.
 
 Resume without supplying a target or replacement assessment criteria:
 
@@ -30,14 +44,16 @@ Resume without supplying a target or replacement assessment criteria:
 frontier-assess --resume ./target/.mcts-research/RUN_ID/checkpoint.json --max-steps 8
 ```
 
-Target, scope, prohibited states, creation time, assessment ID and a hash of the
-reviewed brief are persisted before research begins in
-`.frontier/ASSESSMENT_ID/manifest.json`. The same manifest is embedded in the
-reviewed brief, which `mcts-agent` checkpoints before execution. Resume compares
-the saved copies, validates the brief and workspace, and rejects replacement
-metadata. Legacy checkpoints without this manifest must start a new assessment.
-These consistency checks do not protect against an attacker rewriting every
-local control file; trusted execution/storage provenance is future upstream work.
+Resume uses the connector and model persisted in the checkpoint; connector and
+model overrides are rejected. Target, scope, prohibited states, creation time,
+assessment ID and a hash of the reviewed brief are persisted before research
+begins in `.frontier/ASSESSMENT_ID/manifest.json`. The same manifest is embedded
+in the reviewed brief, which `mcts-agent` checkpoints before execution. Resume
+compares the saved copies, validates the brief and workspace, and rejects
+replacement metadata. Legacy checkpoints without this manifest must start a new
+assessment. These consistency checks do not protect against an attacker rewriting
+every local control file; trusted execution/storage provenance is future upstream
+work.
 
 The run directory contains `assessment.json`, the research checkpoint and
 captured evidence. Report generation reopens and verifies every referenced
@@ -86,8 +102,9 @@ state, run_dir, report = run_assessment(
     scope=['application source', 'local test environment'],
     prohibited_states=['ordinary user reads another user record'],
     max_steps=12,
+    connector='opencode',  # optional; Codex is the default
 )
-state, run_dir, report = run_assessment(resume=run_dir, max_steps=8)
+state, run_dir, report = run_assessment(resume=run_dir / 'checkpoint.json', max_steps=8)
 ```
 
 For direct adapter integration, `prepare_assessment(Assessment(...))` returns a
